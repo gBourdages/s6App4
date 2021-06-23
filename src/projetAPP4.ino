@@ -41,6 +41,9 @@ volatile uint8_t bitMask = 0b00000001;
 volatile uint8_t bitBuffer = 0b00000000;
 volatile uint8_t byteBuffer[255] = {};
 
+volatile bool crc_tab16_init = false;
+volatile uint16_t crc_tab16[256];
+
 void setup() {
 	Serial.begin(9600);
   pinMode(OUTPUT_PIN, OUTPUT_OPEN_DRAIN);
@@ -73,7 +76,7 @@ void fallingInterrupt() {
     registerHeaderData(1);
     if (!headerMask) {
       state = MESSAGE;
-      msgLength = header & 0b0000000011111111;
+      msgLength = (header & 0b1111111100000000) >> 8;
       //Serial.println(msgLength);
     }
     break;
@@ -127,7 +130,7 @@ void risingInterrupt() {
     registerHeaderData(0);
     if (!headerMask) {
       state = MESSAGE;
-      msgLength = header & 0b0000000011111111;
+      msgLength = (header & 0b1111111100000000) >> 8;
       //Serial.println(msgLength);
     }
     break;
@@ -156,11 +159,15 @@ void risingInterrupt() {
 
 void sendingThreadFunction(void *param) {
 	while(true) {
+    uint16_t crc = crc16((uint8_t*)"Un message", 11);
+
 		preambule();
-    startEndByte();
-    entete(1,1);
-    message();
-    startEndByte();
+    sendByte(0b01111110);
+    sendByte(0b00000000); //flags
+    sendByte(11); //length
+    sendBytes((uint8_t*)"Un message", 11);
+    sendDualByte(crc);
+    sendByte(0b01111110);
 
     pinSetFast(OUTPUT_PIN);
     delay(10000);
@@ -179,53 +186,24 @@ void registerBitData(bool data) {
   bitMask <<= 1;
 }
 
-void message() {
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
+void sendBytes(uint8_t* bytes, uint8_t length) {
+  for (int i = 0; i < length; ++i) {
+    for (int j = 0; j < 8; ++j) {
+      sendManchesterBit(bytes[i] & (0b00000001 << j));
+    }
+  }
 }
 
-void entete(uint8_t flags, uint8_t length) {
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
+void sendByte(uint8_t byte) {
+  for (int j = 0; j < 8; ++j) {
+      sendManchesterBit(byte & (0b00000001 << j));
+  }
+}
 
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterLOW();
+void sendDualByte(uint16_t byte) {
+  for (int j = 0; j < 16; ++j) {
+      sendManchesterBit(byte & (0b0000000000000001 << j));
+  }
 }
 
 void preambule() {
@@ -237,17 +215,6 @@ void preambule() {
   sendManchesterHIGH();
   sendManchesterLOW();
   sendManchesterHIGH();
-}
-
-void startEndByte() {
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
 }
 
 void sendManchesterLOW() {
@@ -263,3 +230,57 @@ void sendManchesterHIGH() {
   pinResetFast(OUTPUT_PIN);
   System.ticksDelay(manchesterTicks);
 }
+
+void sendManchesterBit(bool value) {
+  if (value) {
+    sendManchesterHIGH();
+    return;
+  }
+  sendManchesterLOW();
+}
+
+uint16_t crc16(uint8_t *input_str, uint8_t num_bytes ) {
+
+	uint16_t crc;
+	const unsigned char *ptr;
+	size_t a;
+
+	if ( ! crc_tab16_init ) init_crc16_tab();
+
+	crc = 0x0000;
+	ptr = input_str;
+
+	if ( ptr != NULL ) for (a=0; a<num_bytes; a++) {
+
+		crc = (crc >> 8) ^ crc_tab16[ (crc ^ (uint16_t) *ptr++) & 0x00FF ];
+	}
+
+	return crc;
+
+}
+
+void init_crc16_tab( void ) {
+
+	uint16_t i;
+	uint16_t j;
+	uint16_t crc;
+	uint16_t c;
+
+	for (i=0; i<256; i++) {
+
+		crc = 0;
+		c   = i;
+
+		for (j=0; j<8; j++) {
+
+			if ( (crc ^ c) & 0x0001 ) crc = ( crc >> 1 ) ^ 0xA001;
+			else                      crc =   crc >> 1;
+
+			c = c >> 1;
+		}
+
+		crc_tab16[i] = crc;
+	}
+
+	crc_tab16_init = true;
+}  

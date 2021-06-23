@@ -11,12 +11,12 @@ void fallingInterrupt();
 void risingInterrupt();
 void registerHeaderData(bool data);
 void registerBitData(bool data);
-void message();
-void entete(uint8_t flags, uint8_t length);
+void sendBytes(uint8_t* bytes, uint8_t length);
+void sendByte(uint8_t byte);
 void preambule();
-void startEndByte();
 void sendManchesterLOW();
 void sendManchesterHIGH();
+void sendManchesterBit(bool value);
 #line 3 "c:/Users/Gabriel/Desktop/s6App4/src/projetAPP4.ino"
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
@@ -91,7 +91,7 @@ void fallingInterrupt() {
     registerHeaderData(1);
     if (!headerMask) {
       state = MESSAGE;
-      msgLength = header & 0b0000000011111111;
+      msgLength = (header & 0b1111111100000000) >> 8;
       //Serial.println(msgLength);
     }
     break;
@@ -145,7 +145,7 @@ void risingInterrupt() {
     registerHeaderData(0);
     if (!headerMask) {
       state = MESSAGE;
-      msgLength = header & 0b0000000011111111;
+      msgLength = (header & 0b1111111100000000) >> 8;
       //Serial.println(msgLength);
     }
     break;
@@ -175,10 +175,12 @@ void risingInterrupt() {
 void sendingThreadFunction(void *param) {
 	while(true) {
 		preambule();
-    startEndByte();
-    entete(1,1);
-    message();
-    startEndByte();
+    sendByte(0b01111110);
+    sendByte(0b00000000); //flags
+    sendByte(11); //length
+    sendBytes((uint8_t*)"Un message", 11);
+    //crc16("Un message", 11);
+    sendByte(0b01111110);
 
     pinSetFast(OUTPUT_PIN);
     delay(10000);
@@ -197,53 +199,18 @@ void registerBitData(bool data) {
   bitMask <<= 1;
 }
 
-void message() {
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
+void sendBytes(uint8_t* bytes, uint8_t length) {
+  for (int i = 0; i < length; ++i) {
+    for (int j = 0; j < 8; ++j) {
+      sendManchesterBit(bytes[i] & (0b00000001 << j));
+    }
+  }
 }
 
-void entete(uint8_t flags, uint8_t length) {
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterLOW();
+void sendByte(uint8_t byte) {
+  for (int j = 0; j < 8; ++j) {
+      sendManchesterBit(byte & (0b00000001 << j));
+  }
 }
 
 void preambule() {
@@ -255,17 +222,6 @@ void preambule() {
   sendManchesterHIGH();
   sendManchesterLOW();
   sendManchesterHIGH();
-}
-
-void startEndByte() {
-  sendManchesterLOW();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterHIGH();
-  sendManchesterLOW();
 }
 
 void sendManchesterLOW() {
@@ -280,4 +236,12 @@ void sendManchesterHIGH() {
   System.ticksDelay(manchesterTicks);
   pinResetFast(OUTPUT_PIN);
   System.ticksDelay(manchesterTicks);
+}
+
+void sendManchesterBit(bool value) {
+  if (value) {
+    sendManchesterHIGH();
+    return;
+  }
+  sendManchesterLOW();
 }
