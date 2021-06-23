@@ -7,10 +7,12 @@ SYSTEM_THREAD(ENABLED);
 #define OUTPUT_PIN D2
 #define INPUT_PIN D4
 
+#define ACK_ON 1
+
 //SENDER----------------------------------------------------------------------------------
 
 //En microsecondes. La période d'un bit manchester correspond à 2 fois cette valeur
-#define MANCHESTER_TIME 750 
+#define MANCHESTER_TIME 700 
 uint32_t manchesterTicks = System.ticksPerMicrosecond() * MANCHESTER_TIME;
 
 void sendingThreadFunction(void *param);
@@ -21,17 +23,22 @@ volatile uint16_t crcAck = 0;
 
 void sendingThreadFunction(void *param) {
 	while(true) {
-    sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 500);
+    sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 1000, false);
     delay(250);
 
-    sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 500);
+    sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 1000, false);
+    delay(250);
+
+    sendMessage((uint8_t*)"Message Gab 3", 14, 0b00000000, 1000, false);
     delay(250);
 	}
 }
 
-void sendMessage(uint8_t* message, uint8_t length, uint8_t flags, uint32_t ackDelay) {
+void sendMessage(uint8_t* message, uint8_t length, uint8_t flags, uint32_t ackDelay, bool induceError) {
   uint16_t msgCrc = crc16(message, length);
-  while (crcAck != msgCrc) {
+  if (induceError)
+    msgCrc++;
+  do {
     os_mutex_lock(transmitMutex);
     preambule();
     sendByte(0b01111110);
@@ -41,20 +48,20 @@ void sendMessage(uint8_t* message, uint8_t length, uint8_t flags, uint32_t ackDe
     sendDualByte(msgCrc);
     sendByte(0b01111110);
     os_mutex_unlock(transmitMutex);
-    delay(ackDelay);
-  }
+    if (ACK_ON) {
+      for(uint32_t counter = 0; (crcAck != msgCrc) && (counter < ackDelay); ++counter)
+        delay(1);
+    }
+  } while (ACK_ON && (crcAck != msgCrc));
 }
 
 void sendAck(uint16_t crc) {
-  uint8_t crcSplit[2] = {(uint8_t)(crc & 0b1111111100000000 >> 8), (uint8_t)(crc & 0b0000000011111111)};
-  uint16_t crCeption = crc16(crcSplit, 2);
   os_mutex_lock(transmitMutex);
   preambule();
   sendByte(0b01111110);
   sendByte(0b00000001); //flags
-  sendByte(2);          //length
+  sendByte(0);          //length
   sendDualByte(crc);
-  sendDualByte(crCeption);
   sendByte(0b01111110);
   os_mutex_unlock(transmitMutex);
 }
@@ -91,10 +98,15 @@ void preambule() {
 }
 
 void sendManchesterLOW() {
+  //uint32_t ticks = System.ticks();
   pinResetFast(OUTPUT_PIN);
   System.ticksDelay(manchesterTicks);
   pinSetFast(OUTPUT_PIN);
   System.ticksDelay(manchesterTicks);
+  /*ticks = System.ticks() - ticks;
+  WITH_LOCK(Serial) {
+    Serial.printlnf("Manchester Bit Time (ticks) : %d", ticks);
+  }*/
 }
 
 void sendManchesterHIGH() {
@@ -130,6 +142,7 @@ volatile uint32_t lastStateChange;
 volatile bool inputPinValue;
 volatile uint32_t interruptTick = 0;
 volatile uint8_t byteCount = 0;
+volatile bool isAck = false;
 
 //Variables pour le calcul de la clock
 volatile uint32_t preambuleStateTimes = 0;
@@ -176,17 +189,22 @@ void loop() {
 
     if(receivedCrc == crc16((uint8_t*)byteBuffer, msgLength)) {
 
-      sendAck(receivedCrc);
+      if (ACK_ON)
+        sendAck(receivedCrc);
 
-      Serial.print("Message : ");
-      Serial.println((char*)byteBuffer);
+      WITH_LOCK(Serial) {
+        Serial.print("Message : ");
+        Serial.println((char*)byteBuffer);
 
-      Serial.print("Crc : ");
-      Serial.println(receivedCrc);
+        Serial.print("Crc : ");
+        Serial.println(receivedCrc);
+      }
+      
     } else {
-      Serial.println("BAD MESSAGE RECEIVED");
+      WITH_LOCK(Serial) {
+        Serial.println("BAD MESSAGE RECEIVED");
+      }
     }
-
   }
 
   if((state != WAITING) && (((System.ticks() - lastWaitingTick) / System.ticksPerMicrosecond()) > 1000000)) {
@@ -203,6 +221,7 @@ void loop() {
 }
 
 void interrupt() {
+  //Serial.printlnf("STATE---------- : %d", state);
   interruptTick = System.ticks();
   inputPinValue = pinReadFast(INPUT_PIN);
   switch (state) {
@@ -245,10 +264,15 @@ void interrupt() {
     lastStateChange = interruptTick;
     registerHeaderData(!inputPinValue);
     if (!headerMask) {
-      if (header & 0b0000000000000001)
-        state = ACK;
-      else
+      if (header & 0b0000000000000001) {
+        isAck = true;
+        state = CRC;
+      }
+      else {
+        isAck = false;
         state = MESSAGE;
+      }
+        
       msgLength = (header & 0b1111111100000000) >> 8;
     }
     break;
@@ -268,7 +292,7 @@ void interrupt() {
     }
     break;
 
-    case ACK:
+    /*case ACK:
     if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
       break;
     lastStateChange = interruptTick;
@@ -277,7 +301,7 @@ void interrupt() {
       state = CRC;
       crcAck = ackBuffer;
     }
-    break;
+    break;*/
 
     case CRC:
       if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
@@ -285,6 +309,8 @@ void interrupt() {
       lastStateChange = interruptTick;
       registerCRCData(!inputPinValue);
       if (!crcMask) {
+        if(isAck)
+          crcAck = crcBuffer;
         receivedCrc = crcBuffer;
         state = END;
       }
@@ -300,12 +326,14 @@ void interrupt() {
           triggError();
           break;
         }
-        newMessage = true;
+        newMessage = !isAck;
         state = WAITING;
         resetMEF();
       }
       break;
   }
+  //uint32_t ticks = System.ticks() - interruptTick;
+  //Serial.printlnf("Ticks : %d", ticks);
 }
 
 void registerHeaderData(bool data) {
