@@ -56,7 +56,7 @@ void setup() {
 }
 
 void loop() {
-  if (
+
 }
 
 void resetMEF() {
