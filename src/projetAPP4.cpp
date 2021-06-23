@@ -12,6 +12,7 @@ void registerHeaderData(bool data);
 void registerMsgData(bool data);
 void registerCRCData(bool data);
 void registerEndByteData(bool data);
+void registerStartByteData(bool data);
 void sendBytes(uint8_t* bytes, uint8_t length);
 void sendByte(uint8_t byte);
 void sendDualByte(uint16_t byte);
@@ -64,7 +65,14 @@ volatile uint16_t crcMask = 0b0000000000000001;
 volatile uint16_t crcBuffer = 0b0000000000000000;
 volatile uint8_t endByteMask = 0b00000001;
 volatile uint8_t endByteBuffer = 0b00000000;
+volatile uint8_t startByteMask = 0b00000001;
+volatile uint8_t startByteBuffer = 0b00000000;
+
 volatile uint8_t byteBuffer[255] = {};
+volatile bool newMessage = false;
+volatile bool error = false;
+
+volatile uint16_t receivedCrc;
 
 volatile bool inputPinValue;
 
@@ -77,6 +85,24 @@ void setup() {
 }
 
 void loop() {
+  if (newMessage) {
+    newMessage = false;
+
+    Serial.print("Message : ");
+    Serial.println((char*)byteBuffer);
+
+    Serial.print("Received Crc : ");
+    Serial.println(receivedCrc);
+
+    Serial.print("Calculated Crc : ");
+    Serial.println(crc16((uint8_t*)byteBuffer, msgLength));
+  }
+
+  if (error) {
+    error = false;
+    delay(500);
+    interrupts();
+  }
 }
 
 void resetMEF() {
@@ -95,6 +121,9 @@ void resetMEF() {
 
   endByteMask = 0b00000001;
   endByteBuffer = 0b00000000;
+
+  startByteMask = 0b00000001;
+  startByteBuffer = 0b00000000;
 }
 
 void interrupt() {
@@ -108,25 +137,33 @@ void interrupt() {
     break;
 
   case PREAMBULE:
-    if(!inputPinValue)
-      break;
-    period = interruptTick - periodStart;
-    periodStart = interruptTick;
-    if (preambuleStateTimes++ >= 4) {
+    if(!inputPinValue) {
+      period = interruptTick - periodStart;
+      periodStart = interruptTick;
+    }
+    if (++preambuleStateTimes >= 8) {
       state = START;
       manchesterTicksReceiver = period / 4;
+      lastStateChange = interruptTick;
       //Serial.println(manchesterTicksReceiver);
       //Serial.println(manchesterTicks);
     }
     break;
 
   case START:
-    if(!inputPinValue)
-      break;
-    if (startStateTimes++ >= 5) {
+    if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
+        break;
       lastStateChange = interruptTick;
-      state = HEADER;
-    }
+      registerStartByteData(!inputPinValue);
+      if (!startByteMask) {
+        if(startByteBuffer != 0b01111110) {
+          state = WAITING;
+          resetMEF();
+          error = true;
+          noInterrupts();
+        }
+        state = HEADER;
+      }
     break;
   
   case HEADER:
@@ -164,6 +201,7 @@ void interrupt() {
       lastStateChange = interruptTick;
       registerCRCData(!inputPinValue);
       if (!crcMask) {
+        receivedCrc = crcBuffer;
         state = END;
       }
       break;
@@ -174,10 +212,13 @@ void interrupt() {
       lastStateChange = interruptTick;
       registerEndByteData(!inputPinValue);
       if (!endByteMask) {
+        if(endByteBuffer != 0b01111110) {
+          error = true;
+          noInterrupts();
+        }else {
+          newMessage = true;
+        }
         state = WAITING;
-        Serial.println((char*)byteBuffer);
-        Serial.println(crcBuffer);
-        Serial.println(endByteBuffer);
         resetMEF();
       }
       break;
@@ -232,6 +273,12 @@ void registerEndByteData(bool data) {
   if (data)
     endByteBuffer |= endByteMask;
   endByteMask <<= 1;
+}
+
+void registerStartByteData(bool data) {
+  if (data)
+    startByteBuffer |= startByteMask;
+  startByteMask <<= 1;
 }
 
 void sendBytes(uint8_t* bytes, uint8_t length) {
