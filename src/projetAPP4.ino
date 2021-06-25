@@ -29,7 +29,7 @@ void sendingThreadFunction(void *param) {
     sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 1000, false);
     delay(10000);
 
-    sendMessage((uint8_t*)"Domingo n'est pas a l'examen du samedi, il regarde le baseball!!!!!!!!!!!!!!!!!", 80, 0b00000000, 1000, false);
+    sendMessage((uint8_t*)"1234567890qwertyuioplkjhgfdsazxcvbnmQWERTYUIOPLKJHGFDSAZXCVBNM12345678901234567", 80, 0b00000000, 1000, false);
     delay(10000);
 	}
 }
