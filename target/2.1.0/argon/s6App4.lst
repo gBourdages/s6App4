@@ -19,19 +19,19 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
   7 .module_info_crc 00000004  000d68f0  000d68f0  000268f0  2**0
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
-  8 .debug_info   001159bc  00000000  00000000  000268f4  2**0
+  8 .debug_info   001159b9  00000000  00000000  000268f4  2**0
                   CONTENTS, READONLY, DEBUGGING
-  9 .debug_abbrev 00013481  00000000  00000000  0013c2b0  2**0
+  9 .debug_abbrev 00013481  00000000  00000000  0013c2ad  2**0
                   CONTENTS, READONLY, DEBUGGING
- 10 .debug_loc    00023595  00000000  00000000  0014f731  2**0
+ 10 .debug_loc    00023595  00000000  00000000  0014f72e  2**0
                   CONTENTS, READONLY, DEBUGGING
- 11 .debug_aranges 00002400  00000000  00000000  00172cc6  2**0
+ 11 .debug_aranges 00002400  00000000  00000000  00172cc3  2**0
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_ranges 00006948  00000000  00000000  001750c6  2**0
+ 12 .debug_ranges 00006948  00000000  00000000  001750c3  2**0
                   CONTENTS, READONLY, DEBUGGING
- 13 .debug_macro  00035466  00000000  00000000  0017ba0e  2**0
+ 13 .debug_macro  00035466  00000000  00000000  0017ba0b  2**0
                   CONTENTS, READONLY, DEBUGGING
- 14 .debug_line   000301cd  00000000  00000000  001b0e74  2**0
+ 14 .debug_line   000301d0  00000000  00000000  001b0e71  2**0
                   CONTENTS, READONLY, DEBUGGING
  15 .debug_str    00103eaf  00000000  00000000  001e1041  2**0
                   CONTENTS, READONLY, DEBUGGING
@@ -1751,39 +1751,39 @@ void sendMessage(uint8_t* message, uint8_t length, uint8_t flags, uint32_t ackDe
 void sendingThreadFunction(void *param) {
    d4af4:	b507      	push	{r0, r1, r2, lr}
     sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 1000, false);
-   d4af6:	2400      	movs	r4, #0
-   d4af8:	4622      	mov	r2, r4
-   d4afa:	f44f 737a 	mov.w	r3, #1000	; 0x3e8
-   d4afe:	210e      	movs	r1, #14
-   d4b00:	4810      	ldr	r0, [pc, #64]	; (d4b44 <_Z21sendingThreadFunctionPv+0x50>)
-   d4b02:	9400      	str	r4, [sp, #0]
-   d4b04:	f7ff ff9c 	bl	d4a40 <_Z11sendMessagePhhhmb>
-    delay(10000);
-   d4b08:	f242 7010 	movw	r0, #10000	; 0x2710
-   d4b0c:	f000 fc52 	bl	d53b4 <delay>
+   d4af6:	4d13      	ldr	r5, [pc, #76]	; (d4b44 <_Z21sendingThreadFunctionPv+0x50>)
+   d4af8:	2400      	movs	r4, #0
+   d4afa:	4622      	mov	r2, r4
+   d4afc:	f44f 737a 	mov.w	r3, #1000	; 0x3e8
+   d4b00:	210e      	movs	r1, #14
+   d4b02:	4628      	mov	r0, r5
+   d4b04:	9400      	str	r4, [sp, #0]
+   d4b06:	f7ff ff9b 	bl	d4a40 <_Z11sendMessagePhhhmb>
+    delay(1000);
+   d4b0a:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
+   d4b0e:	f000 fc51 	bl	d53b4 <delay>
     sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 1000, false);
-   d4b10:	4622      	mov	r2, r4
-   d4b12:	f44f 737a 	mov.w	r3, #1000	; 0x3e8
-   d4b16:	210e      	movs	r1, #14
-   d4b18:	480b      	ldr	r0, [pc, #44]	; (d4b48 <_Z21sendingThreadFunctionPv+0x54>)
-   d4b1a:	9400      	str	r4, [sp, #0]
-   d4b1c:	f7ff ff90 	bl	d4a40 <_Z11sendMessagePhhhmb>
-    delay(10000);
-   d4b20:	f242 7010 	movw	r0, #10000	; 0x2710
-   d4b24:	f000 fc46 	bl	d53b4 <delay>
-    sendMessage((uint8_t*)"Domingo n'est pas a l'examen du samedi, il regarde le baseball!!!!!!!!!!!!!!!!!", 80, 0b00000000, 1000, false);
-   d4b28:	4808      	ldr	r0, [pc, #32]	; (d4b4c <_Z21sendingThreadFunctionPv+0x58>)
-   d4b2a:	9400      	str	r4, [sp, #0]
-   d4b2c:	f44f 737a 	mov.w	r3, #1000	; 0x3e8
-   d4b30:	4622      	mov	r2, r4
-   d4b32:	2150      	movs	r1, #80	; 0x50
-   d4b34:	f7ff ff84 	bl	d4a40 <_Z11sendMessagePhhhmb>
-    delay(10000);
-   d4b38:	f242 7010 	movw	r0, #10000	; 0x2710
-   d4b3c:	f000 fc3a 	bl	d53b4 <delay>
+   d4b12:	4622      	mov	r2, r4
+   d4b14:	f44f 737a 	mov.w	r3, #1000	; 0x3e8
+   d4b18:	210e      	movs	r1, #14
+   d4b1a:	480b      	ldr	r0, [pc, #44]	; (d4b48 <_Z21sendingThreadFunctionPv+0x54>)
+   d4b1c:	9400      	str	r4, [sp, #0]
+   d4b1e:	f7ff ff8f 	bl	d4a40 <_Z11sendMessagePhhhmb>
+    delay(1000);
+   d4b22:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
+   d4b26:	f000 fc45 	bl	d53b4 <delay>
+    sendMessage((uint8_t*)"1234567890qwertyuioplkjhgfdsazxcvbnmQWERTYUIOPLKJHGFDSAZXCVBNM12345678901234567", 80, 0b00000000, 1000, false);
+   d4b2a:	4808      	ldr	r0, [pc, #32]	; (d4b4c <_Z21sendingThreadFunctionPv+0x58>)
+   d4b2c:	9400      	str	r4, [sp, #0]
+   d4b2e:	f44f 737a 	mov.w	r3, #1000	; 0x3e8
+   d4b32:	4622      	mov	r2, r4
+   d4b34:	2150      	movs	r1, #80	; 0x50
+   d4b36:	f7ff ff83 	bl	d4a40 <_Z11sendMessagePhhhmb>
+    delay(1000);
+   d4b3a:	f44f 707a 	mov.w	r0, #1000	; 0x3e8
+   d4b3e:	f000 fc39 	bl	d53b4 <delay>
 	while(true) {
-   d4b40:	e7d9      	b.n	d4af6 <_Z21sendingThreadFunctionPv+0x2>
-   d4b42:	bf00      	nop
+   d4b42:	e7d9      	b.n	d4af8 <_Z21sendingThreadFunctionPv+0x4>
    d4b44:	000d6611 	.word	0x000d6611
    d4b48:	000d661f 	.word	0x000d661f
    d4b4c:	000d662d 	.word	0x000d662d
@@ -1940,7 +1940,7 @@ SYSTEM_THREAD(ENABLED);
    d4c80:	681b      	ldr	r3, [r3, #0]
    d4c82:	fbb3 f1f1 	udiv	r1, r3, r1
 uint32_t manchesterTicks = System.ticksPerMicrosecond() * MANCHESTER_TIME;
-   d4c86:	f44f 732f 	mov.w	r3, #700	; 0x2bc
+   d4c86:	f44f 730c 	mov.w	r3, #560	; 0x230
    d4c8a:	434b      	muls	r3, r1
 
   template<std::size_t _Idx, typename _Head>
@@ -5880,12 +5880,12 @@ TwoWire& __fetch_global_Wire()
    d65f8:	0064 5245 4f52 2052 5254 4749 4547 0044     d.ERROR TRIGGED.
    d6608:	4341 204b 4e49 2120 4d00 7365 6173 6567     ACK IN !.Message
    d6618:	4720 6261 3120 4d00 7365 6173 6567 4720      Gab 1.Message G
-   d6628:	6261 3220 4400 6d6f 6e69 6f67 6e20 6527     ab 2.Domingo n'e
-   d6638:	7473 7020 7361 6120 6c20 6527 6178 656d     st pas a l'exame
-   d6648:	206e 7564 7320 6d61 6465 2c69 6920 206c     n du samedi, il 
-   d6658:	6572 6167 6472 2065 656c 6220 7361 6265     regarde le baseb
-   d6668:	6c61 216c 2121 2121 2121 2121 2121 2121     all!!!!!!!!!!!!!
-   d6678:	2121 2121 4d00 7365 6173 6567 3a20 2520     !!!!.Message : %
+   d6628:	6261 3220 3100 3332 3534 3736 3938 7130     ab 2.1234567890q
+   d6638:	6577 7472 7579 6f69 6c70 6a6b 6768 6466     wertyuioplkjhgfd
+   d6648:	6173 787a 7663 6e62 516d 4557 5452 5559     sazxcvbnmQWERTYU
+   d6658:	4f49 4c50 4a4b 4748 4446 4153 585a 5643     IOPLKJHGFDSAZXCV
+   d6668:	4e42 314d 3332 3534 3736 3938 3130 3332     BNM1234567890123
+   d6678:	3534 3736 4d00 7365 6173 6567 3a20 2520     4567.Message : %
    d6688:	0073 7243 2063 203a 6425 4200 4441 4d20     s.Crc : %d.BAD M
    d6698:	5345 4153 4547 5220 4345 4945 4556 0044     ESSAGE RECEIVED.
    d66a8:	4157 5449 4e49 2047 4954 454d 554f 0054     WAITING TIMEOUT.

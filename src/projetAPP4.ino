@@ -12,7 +12,7 @@ SYSTEM_THREAD(ENABLED);
 //SENDER----------------------------------------------------------------------------------
 
 //En microsecondes. La période d'un bit manchester correspond à 2 fois cette valeur
-#define MANCHESTER_TIME 700 
+#define MANCHESTER_TIME 565
 uint32_t manchesterTicks = System.ticksPerMicrosecond() * MANCHESTER_TIME;
 
 void sendingThreadFunction(void *param);
@@ -24,13 +24,13 @@ volatile uint16_t crcAck = 0;
 void sendingThreadFunction(void *param) {
 	while(true) {
     sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 1000, false);
-    delay(10000);
+    delay(1000);
 
     sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 1000, false);
-    delay(10000);
+    delay(1000);
 
     sendMessage((uint8_t*)"1234567890qwertyuioplkjhgfdsazxcvbnmQWERTYUIOPLKJHGFDSAZXCVBNM12345678901234567", 80, 0b00000000, 1000, false);
-    delay(10000);
+    delay(1000);
 	}
 }
 
