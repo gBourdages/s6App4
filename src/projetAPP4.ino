@@ -24,13 +24,13 @@ volatile uint16_t crcAck = 0;
 void sendingThreadFunction(void *param) {
 	while(true) {
     sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 1000, false);
-    delay(250);
+    delay(10000);
 
     sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 1000, false);
-    delay(250);
+    delay(10000);
 
-    sendMessage((uint8_t*)"Message Gab 3", 14, 0b00000000, 1000, false);
-    delay(250);
+    sendMessage((uint8_t*)"Domingo n'est pas a l'examen du samedi, il regarde le baseball!!!!!!!!!!!!!!!!!", 80, 0b00000000, 1000, false);
+    delay(10000);
 	}
 }
 
@@ -53,6 +53,9 @@ void sendMessage(uint8_t* message, uint8_t length, uint8_t flags, uint32_t ackDe
         delay(1);
     }
   } while (ACK_ON && (crcAck != msgCrc));
+  WITH_LOCK(Serial) {
+    Serial.println("ACK IN !");
+  }
 }
 
 void sendAck(uint16_t crc) {
@@ -193,11 +196,8 @@ void loop() {
         sendAck(receivedCrc);
 
       WITH_LOCK(Serial) {
-        Serial.print("Message : ");
-        Serial.println((char*)byteBuffer);
-
-        Serial.print("Crc : ");
-        Serial.println(receivedCrc);
+        Serial.printlnf("Message : %s", (char*)byteBuffer);
+        Serial.printlnf("Crc : %d", receivedCrc);
       }
       
     } else {
@@ -207,14 +207,17 @@ void loop() {
     }
   }
 
-  if((state != WAITING) && (((System.ticks() - lastWaitingTick) / System.ticksPerMicrosecond()) > 1000000)) {
+  if((state != WAITING) && (((System.ticks() - lastWaitingTick) / System.ticksPerMicrosecond()) > 10000000)) {
     resetMEF();
-    Serial.println("WAITING TIMEOUT");
+    WITH_LOCK(Serial) {
+      Serial.println("WAITING TIMEOUT");
+    }
+    
   }
 
   if (error) {
     error = false;
-    delay(random(250, 750));
+    delay(random(1, 1000));
     resetMEF();
     interrupts();
   }
@@ -291,17 +294,6 @@ void interrupt() {
       }
     }
     break;
-
-    /*case ACK:
-    if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
-      break;
-    lastStateChange = interruptTick;
-    registerAckData(!inputPinValue);
-    if (!ackMask) {
-      state = CRC;
-      crcAck = ackBuffer;
-    }
-    break;*/
 
     case CRC:
       if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
