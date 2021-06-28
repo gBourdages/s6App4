@@ -12,7 +12,7 @@ SYSTEM_THREAD(ENABLED);
 //SENDER----------------------------------------------------------------------------------
 
 //En microsecondes. La période d'un bit manchester correspond à 2 fois cette valeur
-#define MANCHESTER_TIME 565
+#define MANCHESTER_TIME 700
 uint32_t manchesterTicks = System.ticksPerMicrosecond() * MANCHESTER_TIME;
 
 void sendingThreadFunction(void *param);
@@ -23,14 +23,17 @@ volatile uint16_t crcAck = 0;
 
 void sendingThreadFunction(void *param) {
 	while(true) {
-    sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 1000, false);
-    delay(1000);
+    sendMessage((uint8_t*)"Message Gab 1", 14, 0b00000000, 2000, false);
+    delay(7000);
 
-    sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 1000, false);
-    delay(1000);
+    sendMessage((uint8_t*)"Message Gab 2", 14, 0b00000000, 2000, false);
+    delay(7000);
 
-    sendMessage((uint8_t*)"1234567890qwertyuioplkjhgfdsazxcvbnmQWERTYUIOPLKJHGFDSAZXCVBNM12345678901234567", 80, 0b00000000, 1000, false);
-    delay(1000);
+    sendMessage((uint8_t*)"1234567890qwertyuioplkjhgfdsazxcvbnmQWERTYUIOPLKJHGFDSAZXCVBNM12345678901234567", 80, 0b00000000, 2000, false);
+    delay(7000);
+
+    sendMessage((uint8_t*)"Message Gab 4", 14, 0b00000000, 2000, false);
+    delay(7000);
 	}
 }
 
@@ -101,15 +104,10 @@ void preambule() {
 }
 
 void sendManchesterLOW() {
-  //uint32_t ticks = System.ticks();
   pinResetFast(OUTPUT_PIN);
   System.ticksDelay(manchesterTicks);
   pinSetFast(OUTPUT_PIN);
   System.ticksDelay(manchesterTicks);
-  /*ticks = System.ticks() - ticks;
-  WITH_LOCK(Serial) {
-    Serial.printlnf("Manchester Bit Time (ticks) : %d", ticks);
-  }*/
 }
 
 void sendManchesterHIGH() {
@@ -187,6 +185,7 @@ void setup() {
 }
 
 void loop() {
+  //Nouvelle entrée d'un message et vérification du CRC
   if (newMessage) {
     newMessage = false;
 
@@ -207,6 +206,7 @@ void loop() {
     }
   }
 
+  //Mécanisme de protection. Si le récepteur est pris dans la MEF de réception trop longtemps, celle-ci sera réinitialisé
   if((state != WAITING) && (((System.ticks() - lastWaitingTick) / System.ticksPerMicrosecond()) > 10000000)) {
     resetMEF();
     WITH_LOCK(Serial) {
@@ -215,6 +215,8 @@ void loop() {
     
   }
 
+  //Mécanisme de réception. Si le l'octet de départ ou l'octet de fin dans le message est mauvais, les interruptions seront
+  //désactivé pour un temps aléatoire et la MEF de réception sera réinitialié
   if (error) {
     error = false;
     delay(random(1, 1000));
@@ -224,77 +226,83 @@ void loop() {
 }
 
 void interrupt() {
-  //Serial.printlnf("STATE---------- : %d", state);
   interruptTick = System.ticks();
   inputPinValue = pinReadFast(INPUT_PIN);
   switch (state) {
-  case WAITING:
-    lastWaitingTick = interruptTick;
-    if(inputPinValue)
+    //Attend l'entrée d'une nouvelle trame.
+    case WAITING:
+      lastWaitingTick = interruptTick;
+      if(inputPinValue)
+        break;
+      state = PREAMBULE;
       break;
-    state = PREAMBULE;
-    break;
 
-  case PREAMBULE:
-    if(!inputPinValue) {
-      period = interruptTick - periodStart;
-      periodStart = interruptTick;
-    }
-    if (++preambuleStateTimes >= 8) {
-      state = START;
-      manchesterTicksReceiver = period / 4;
-      lastStateChange = interruptTick;
-    }
-    break;
+    //Détermine la clock du signal en entrée.
+    case PREAMBULE:
+      if(!inputPinValue) {
+        period = interruptTick - periodStart;
+        periodStart = interruptTick;
+      }
+      if (++preambuleStateTimes >= 8) {
+        state = START;
+        manchesterTicksReceiver = period / 4;
+        lastStateChange = interruptTick;
+      }
+      break;
 
-  case START:
-    if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
+    //Lis le startByte et lève une erreur si celui-ci est mauvait.
+    case START:
+      if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
+          break;
+        lastStateChange = interruptTick;
+        registerStartByteData(!inputPinValue);
+        if (!startByteMask) {
+          if(startByteBuffer != 0b01111110) {
+            triggError();
+            break;
+          }
+          state = HEADER;
+        }
+      break;
+  
+    //Lis le header et détermine si la trame est une trame de confirmation, si oui,
+    //on ignore l'état d'entrée du message
+    case HEADER:
+      if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
         break;
       lastStateChange = interruptTick;
-      registerStartByteData(!inputPinValue);
-      if (!startByteMask) {
-        if(startByteBuffer != 0b01111110) {
-          triggError();
-          break;
+      registerHeaderData(!inputPinValue);
+      if (!headerMask) {
+        if (header & 0b0000000000000001) {
+          isAck = true;
+          state = CRC;
         }
-        state = HEADER;
-      }
-    break;
-  
-  case HEADER:
-    if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
-      break;
-    lastStateChange = interruptTick;
-    registerHeaderData(!inputPinValue);
-    if (!headerMask) {
-      if (header & 0b0000000000000001) {
-        isAck = true;
-        state = CRC;
-      }
-      else {
-        isAck = false;
-        state = MESSAGE;
-      }
-        
-      msgLength = (header & 0b1111111100000000) >> 8;
-    }
-    break;
-  
-  case MESSAGE:
-    if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
-      break;
-    lastStateChange = interruptTick;
-    registerMsgData(!inputPinValue);
-    if (!msgMask) {
-      byteBuffer[byteCount++] = msgBuffer;
-      msgBuffer = 0b00000000;
-      msgMask = 0b00000001;
-      if (byteCount == msgLength) {
-        state = CRC;
-      }
-    }
-    break;
+        else {
+          isAck = false;
+          state = MESSAGE;
+        }
 
+        msgLength = (header & 0b1111111100000000) >> 8;
+      }
+      break;
+
+    //Lecture du message
+    case MESSAGE:
+      if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
+        break;
+      lastStateChange = interruptTick;
+      registerMsgData(!inputPinValue);
+      if (!msgMask) {
+        byteBuffer[byteCount++] = msgBuffer;
+        msgBuffer = 0b00000000;
+        msgMask = 0b00000001;
+        if (byteCount == msgLength) {
+          state = CRC;
+        }
+      }
+      break;
+
+    //Lecture du CRC
     case CRC:
       if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
         break;
@@ -308,6 +316,7 @@ void interrupt() {
       }
       break;
     
+    //Lis le endByte et lève une erreur si celui-ci est mauvais.
     case END:
       if ((interruptTick - lastStateChange) < (manchesterTicksReceiver * 1.5))
         break;
@@ -324,8 +333,6 @@ void interrupt() {
       }
       break;
   }
-  //uint32_t ticks = System.ticks() - interruptTick;
-  //Serial.printlnf("Ticks : %d", ticks);
 }
 
 void registerHeaderData(bool data) {
